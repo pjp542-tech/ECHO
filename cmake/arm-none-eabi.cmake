@@ -1,0 +1,25 @@
+set(CMAKE_SYSTEM_NAME Generic)
+set(CMAKE_SYSTEM_PROCESSOR arm)
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+
+find_program(CMAKE_C_COMPILER arm-none-eabi-gcc REQUIRED)
+find_program(CMAKE_CXX_COMPILER arm-none-eabi-g++ REQUIRED)
+set(CMAKE_ASM_COMPILER "${CMAKE_C_COMPILER}")
+find_program(CMAKE_OBJCOPY arm-none-eabi-objcopy REQUIRED)
+find_program(CMAKE_SIZE arm-none-eabi-size REQUIRED)
+
+set(CMAKE_EXECUTABLE_SUFFIX_C .elf)
+set(CMAKE_EXECUTABLE_SUFFIX_CXX .elf)
+set(CMAKE_EXECUTABLE_SUFFIX_ASM .elf)
+
+set(MCU_FLAGS "-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard")
+set(CMAKE_C_FLAGS_INIT "${MCU_FLAGS} -Wall -ffunction-sections -fdata-sections")
+set(CMAKE_CXX_FLAGS_INIT "${CMAKE_C_FLAGS_INIT} -fno-exceptions -fno-rtti -fno-threadsafe-statics")
+set(CMAKE_ASM_FLAGS_INIT "${MCU_FLAGS} -x assembler-with-cpp")
+# Set these explicitly: GCC's CMake defaults otherwise append -O3 to Release.
+set(CMAKE_C_FLAGS_DEBUG "-O0 -g3")
+set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3")
+set(CMAKE_C_FLAGS_RELEASE "-Os -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELEASE "-Os -DNDEBUG")
+set(CMAKE_EXE_LINKER_FLAGS_INIT "${MCU_FLAGS} --specs=nano.specs")
+set(TOOLCHAIN_LINK_LIBRARIES m)

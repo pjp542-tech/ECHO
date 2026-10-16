@@ -1,0 +1,25 @@
+{
+    "files.exclude": {
+        "ECHO": true,
+        "build": true,
+        "cmake": true
+    },
+    "search.exclude": {
+        "ECHO/**": true,
+        "build/**": true,
+        "cmake/**": true
+    },
+    "files.watcherExclude": {
+        "**/build/**": true
+    },
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/Debug/compile_commands.json",
+    "C_Cpp.intelliSenseEngine": "default",
+    "stm32cube-ide-clangd.enable": false,
+    "cmake.sourceDirectory": "${workspaceFolder}",
+    "cmake.configureOnOpen": false,
+    "cmake.useCMakePresets": "always",
+    "editor.tabSize": 4,
+    "files.associations": {
+        "*.h": "c"
+    }
+}

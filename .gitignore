@@ -1,0 +1,14 @@
+**/build/
+CMakeUserPresets.json
+**/CMakeUserPresets.json
+*.o
+*.obj
+*.elf
+*.hex
+*.bin
+*.map
+*.su
+*.log
+*_log.txt
+.DS_Store
+Thumbs.db

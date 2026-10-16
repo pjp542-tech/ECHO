@@ -1,0 +1,58 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "ECHO: Build",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/build.ps1"],
+            "osx": { "command": "/bin/bash", "args": ["${workspaceFolder}/build.sh"] },
+            "linux": { "command": "/bin/bash", "args": ["${workspaceFolder}/build.sh"] },
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": ["$gcc"],
+            "presentation": { "reveal": "always", "panel": "shared", "clear": true }
+        },
+        {
+            "label": "ECHO: Build Release",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/build.ps1", "-Configuration", "Release"],
+            "osx": { "command": "/bin/bash", "args": ["${workspaceFolder}/build.sh", "Build", "Release"] },
+            "linux": { "command": "/bin/bash", "args": ["${workspaceFolder}/build.sh", "Build", "Release"] },
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "ECHO: Flash",
+            "detail": "Build, write the firmware to the connected ST-Link board, verify and reset it.",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/build.ps1", "-Action", "Flash"],
+            "osx": { "command": "/bin/bash", "args": ["${workspaceFolder}/build.sh", "Flash"] },
+            "linux": { "command": "/bin/bash", "args": ["${workspaceFolder}/build.sh", "Flash"] },
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "ECHO: Clean",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/build.ps1", "-Action", "Clean"],
+            "osx": { "command": "/bin/bash", "args": ["${workspaceFolder}/build.sh", "Clean"] },
+            "linux": { "command": "/bin/bash", "args": ["${workspaceFolder}/build.sh", "Clean"] },
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        },
+        {
+            "label": "ECHO: Check tools",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/build.ps1", "-Action", "Doctor"],
+            "osx": { "command": "/bin/bash", "args": ["${workspaceFolder}/build.sh", "Doctor"] },
+            "linux": { "command": "/bin/bash", "args": ["${workspaceFolder}/build.sh", "Doctor"] },
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        }
+    ]
+}

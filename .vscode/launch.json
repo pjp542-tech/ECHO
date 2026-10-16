@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "ECHO: Debug on Nucleo",
+            "type": "stlinkgdbtarget",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "ECHO: Build",
+            "preBuild": "",
+            "deviceName": "STM32G431KBTx",
+            "runEntry": "setup",
+            "imagesAndSymbols": [
+                { "imageFileName": "${workspaceFolder}/build/Debug/ECHO.elf" }
+            ],
+            "serverInterface": "SWD",
+            "serverRtos": { "enabled": false },
+            "serverSemihosting": { "enabled": false }
+        }
+    ]
+}

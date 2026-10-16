@@ -1,5 +1,8 @@
+# Build output and local CMake caches (recreated on each computer).
 **/build/
-CMakeUserPresets.json
+**/CMakeFiles/
+**/CMakeCache.txt
+**/compile_commands.json
 **/CMakeUserPresets.json
 *.o
 *.obj
@@ -10,5 +13,21 @@ CMakeUserPresets.json
 *.su
 *.log
 *_log.txt
+
+# Share only the portable VS Code configuration.
+/.vscode/*
+!/.vscode/settings.json
+!/.vscode/tasks.json
+!/.vscode/launch.json
+!/.vscode/extensions.json
+
+# Personal workspaces, IDE configuration and environment files.
+*.local.code-workspace
+.idea/
+.env
+.env.*
+!.env.example
+
+# Operating-system metadata.
 .DS_Store
 Thumbs.db

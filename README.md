@@ -22,6 +22,10 @@ Mac uses the same tasks with a Bash launcher; no PowerShell is needed.
 Tools are found in ST's default bundle folder or on PATH. Custom location: set
 `STM32CUBE_BUNDLE_ROOT`. [ST's installation guide](https://dev.st.com/stm32cube-docs/stm32cubeide-vscode/latest/en/docs/markup/getting_started/installation.html).
 
+No custom project settings are needed. Put personal tool paths in VS Code's
+**Preferences: Open User Settings (JSON)**. Keep the shared settings portable;
+local editor files, personal CMake presets and build output are ignored by Git.
+
 ## Regeneration (only when changing pins/peripherals)
 
 1. Commit your work. Open `ECHO/ECHO.ioc` in CubeMX (use File > Open File if hidden).

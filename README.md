@@ -2,7 +2,7 @@
 
 ## Where to write code
 
-- **`src/main.c`**: `setup()` runs once; `loop()` runs repeatedly.
+- **`src/main.cpp`**: `setup()` runs once; `loop()` runs repeatedly.
 - **`src/`**: add more `.c` / `.cpp` files. They build automatically.
 - **`include/`**: put shared headers here. Include `app.h` to use the STM32 HAL.
 - **`ECHO/`**: generated board setup and drivers. Hidden in VS Code; normally leave it alone.

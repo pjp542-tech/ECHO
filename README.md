@@ -1,4 +1,4 @@
-# Group 2A - ECHO
+# ECHO
 
 ## Where to write code
 
@@ -11,7 +11,7 @@ The starter application is empty. The existing Nucleo pin/peripheral configurati
 
 ## Build and run (Windows or Mac)
 
-1. Open the **Group2A** folder in VS Code and install its recommended extensions.
+1. Open the **ECHO repository root** in VS Code (the folder containing this README, not the generated `ECHO/` subfolder) and install its recommended extensions.
 2. In STM32Cube's bundle manager, install **GNU Tools for STM32, CMake and Ninja**.
    For the board, also install **STM32CubeProgrammer, GNU GDB for STM32 and ST-Link GDB Server**.
 3. Run **Terminal > Run Task > ECHO: Check tools** once.
@@ -27,7 +27,7 @@ Tools are found in ST's default bundle folder or on PATH. Custom location: set
 1. Commit your work. Open `ECHO/ECHO.ioc` in CubeMX (use File > Open File if hidden).
 2. Change the hardware settings. Keep **CMake**, **Keep User Code when re-generating**
    and the existing `ECHO/` output directory; leave Nucleo demo code disabled.
-3. Generate, then build from Group2A as usual. Review and commit the generated changes.
+3. Generate, then build from the repository root as usual. Review and commit the generated changes.
 
 Your `src/` and `include/` files stay separate from generation. CubeMX preserves the
 connection in `ECHO/Core/Src/main.c` inside its **USER CODE** blocks:

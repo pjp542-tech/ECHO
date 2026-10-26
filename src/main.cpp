@@ -72,3 +72,4 @@ void loop(void)
     HAL_ADC_Stop(&hadc1);
     HAL_Delay(500);
 }
+//salah comment

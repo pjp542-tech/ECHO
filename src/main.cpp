@@ -15,7 +15,6 @@ volatile uint32_t resistance_ohms = 0;
 // Runs once after the board is ready.
 void setup(void)
 {
-    // Put your initialisation code here.
     // Calibrate ADC1
     if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK)
     {

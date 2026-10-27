@@ -18,6 +18,10 @@ The starter application is empty. The existing Nucleo pin/peripheral configurati
 4. Build: **Ctrl+Shift+B** on Windows / **Cmd+Shift+B** on Mac.
 5. With the Nucleo connected, run **ECHO: Flash**, or **F5** to debug at `setup()`.
 
+After `git switch`, build as usual; branches can reuse the same build folder.
+The build tasks reconfigure before building and automatically reset a CMake cache
+that still points to a previous project location after a folder move or rename.
+
 Mac uses the same tasks with a Bash launcher; no PowerShell is needed.
 Tools are found in ST's default bundle folder or on PATH. Custom location: set
 `STM32CUBE_BUNDLE_ROOT`. [ST's installation guide](https://dev.st.com/stm32cube-docs/stm32cubeide-vscode/latest/en/docs/markup/getting_started/installation.html).

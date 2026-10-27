@@ -66,6 +66,10 @@ try {
         else { Write-Host 'Flasher: not installed (only needed to program the board).' }
     }
     else {
+        Invoke-BuildTool $cmake @(
+            "-DECHO_PROJECT_DIR=$PSScriptRoot", "-DECHO_CONFIGURATION=$Configuration",
+            '-P', (Join-Path $PSScriptRoot 'cmake/reset-moved-cache.cmake')
+        )
         Invoke-BuildTool $cmake @('--preset', $Configuration)
         if ($Action -eq 'Clean') {
             Invoke-BuildTool $cmake @('--build', '--preset', $Configuration, '--target', 'clean')

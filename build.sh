@@ -63,6 +63,8 @@ if [[ "$action" == Doctor ]]; then
     exit 0
 fi
 
+"$cmake_tool" "-DECHO_PROJECT_DIR=$project_dir" "-DECHO_CONFIGURATION=$configuration" \
+    -P "$project_dir/cmake/reset-moved-cache.cmake"
 "$cmake_tool" --preset "$configuration"
 if [[ "$action" == Clean ]]; then
     "$cmake_tool" --build --preset "$configuration" --target clean

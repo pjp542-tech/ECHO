@@ -1,47 +1,23 @@
-# ECHO
+# LCD functions
 
-## Where to write code
+Rows: **0–3**. Columns: **0–19**. Include `lcd.h`.
 
-- **`src/main.cpp`**: `setup()` runs once; `loop()` runs repeatedly.
-- **`src/`**: add more `.c` / `.cpp` files. They build automatically.
-- **`include/`**: put shared headers here. Include `app.h` to use the STM32 HAL.
-- **`ECHO/`**: generated board setup and drivers. Hidden in VS Code; normally leave it alone.
+| Example | What it does |
+| --- | --- |
+| `lcd_init(&lcd1);` | Initialize once in `setup()`. |
+| `lcd_print(&lcd1, 0, "Hello");` | Print at the start of row 0. |
+| `lcd_gotoxy(&lcd1, 5, 2);` | Move to column 5, row 2 (column first). |
+| `lcd_puts(&lcd1, "Hello");` | Print text at the current cursor. |
+| `lcd_putchar(&lcd1, 'A');` | Print one character at the cursor. |
+| `lcd_clear(&lcd1);` | Clear the screen and return the cursor home. |
+| `lcd_send_cmd(&lcd1, 0x0C);` | Send a raw command (here: display on, cursor off). |
+| `lcd_send_data(&lcd1, 'A');` | Send a character directly. |
 
-The starter application is empty. The existing Nucleo pin/peripheral configuration is retained.
+## Wiring
 
-## Build and run (Windows or Mac)
-
-1. Open the **ECHO repository root** in VS Code (the folder containing this README, not the generated `ECHO/` subfolder) and install its recommended extensions.
-2. In STM32Cube's bundle manager, install **GNU Tools for STM32, CMake and Ninja**.
-   For the board, also install **STM32CubeProgrammer, GNU GDB for STM32 and ST-Link GDB Server**.
-3. Run **Terminal > Run Task > ECHO: Check tools** once.
-4. Build: **Ctrl+Shift+B** on Windows / **Cmd+Shift+B** on Mac.
-5. With the Nucleo connected, run **ECHO: Flash**, or **F5** to debug at `setup()`.
-
-After `git switch`, build as usual; branches can reuse the same build folder.
-The build tasks reconfigure before building and automatically reset a CMake cache
-that still points to a previous project location after a folder move or rename.
-
-Mac uses the same tasks with a Bash launcher; no PowerShell is needed.
-Tools are found in ST's default bundle folder or on PATH. Custom location: set
-`STM32CUBE_BUNDLE_ROOT`. [ST's installation guide](https://dev.st.com/stm32cube-docs/stm32cubeide-vscode/latest/en/docs/markup/getting_started/installation.html).
-
-## Regeneration (only when changing pins/peripherals)
-
-1. Commit your work. Open `ECHO/ECHO.ioc` in CubeMX (use File > Open File if hidden).
-2. Change the hardware settings. Keep **CMake**, **Keep User Code when re-generating**
-   and the existing `ECHO/` output directory; leave Nucleo demo code disabled.
-3. Generate, then build from the repository root as usual. Review and commit the generated changes.
-
-Your `src/` and `include/` files stay separate from generation. CubeMX preserves the
-connection in `ECHO/Core/Src/main.c` inside its **USER CODE** blocks:
-
-- **Includes**: `#include "app.h"`
-- **WHILE**: `setup();` just before `while (1)`
-- **3**: `loop();` inside the loop
-
-The build reports an error if a connection disappears. Add any peripheral handles
-you need to `include/app.h`, e.g. `extern ADC_HandleTypeDef hadc1;` for ADC1.
-
-Windows builds are verified. The Mac launcher is checked on Windows, but still needs
-one real Mac/board check; live debugging and CubeMX regeneration are also untested.
+| LCD pin | Connect to |
+| --- | --- |
+| SDA | PB7 (D4) |
+| SCL | PA15 (D5) |
+| GND | Board GND |
+| VCC | Supply matching the LCD module's rated voltage |

@@ -1,15 +1,17 @@
-// This is the LCD branch for testing and developing the 20x4 I2C LCD display.
 #include "app.h"
+#include "lcd.h"
 
-// Runs once after the board is ready.
+I2C_LCD_HandleTypeDef lcd1 = {&hi2c1, 0x27 << 1};
+
 void setup(void)
 {
-    // Put your initialisation code here.
+    lcd_init(&lcd1);
+
+    lcd_print(&lcd1, 0, "Hello, World!");
+    lcd_print(&lcd1, 1, "ECHO 20x4 LCD test");
+    lcd_print(&lcd1, 3, "12345678901234567890");
 }
 
-// Runs repeatedly.
 void loop(void)
 {
-    // Put your application code here.
 }
-//Treya commented

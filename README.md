@@ -1,51 +1,14 @@
-# ECHO
+# Resistance meter functions
 
-## Where to write code
-
-- **`src/main.cpp`**: `setup()` runs once; `loop()` runs repeatedly.
-- **`src/`**: add more `.c` / `.cpp` files. They build automatically.
-- **`include/`**: put shared headers here. Include `app.h` to use the STM32 HAL.
-- **`ECHO/`**: generated board setup and drivers. Hidden in VS Code; normally leave it alone.
-
-The starter application is empty. The existing Nucleo pin/peripheral configuration is retained.
-
-## Build and run (Windows or Mac)
-
-1. Open the **ECHO repository root** in VS Code (the folder containing this README, not the generated `ECHO/` subfolder) and install its recommended extensions.
-2. In STM32Cube's bundle manager, install **GNU Tools for STM32, CMake and Ninja**.
-   For the board, also install **STM32CubeProgrammer, GNU GDB for STM32 and ST-Link GDB Server**.
-3. Run **Terminal > Run Task > ECHO: Check tools** once.
-4. Build: **Ctrl+Shift+B** on Windows / **Cmd+Shift+B** on Mac.
-5. With the Nucleo connected, run **ECHO: Flash**, or **F5** to debug at `setup()`.
-
-After `git switch`, build as usual; branches can reuse the same build folder.
-The build tasks reconfigure before building and automatically reset a CMake cache
-that still points to a previous project location after a folder move or rename.
-
-Mac uses the same tasks with a Bash launcher; no PowerShell is needed.
-Tools are found in ST's default bundle folder or on PATH. Custom location: set
-`STM32CUBE_BUNDLE_ROOT`. [ST's installation guide](https://dev.st.com/stm32cube-docs/stm32cubeide-vscode/latest/en/docs/markup/getting_started/installation.html).
-
-No custom project settings are needed. Put personal tool paths in VS Code's
-**Preferences: Open User Settings (JSON)**. Keep the shared settings portable;
-local editor files, personal CMake presets and build output are ignored by Git.
-
-## Regeneration (only when changing pins/peripherals)
-
-1. Commit your work. Open `ECHO/ECHO.ioc` in CubeMX (use File > Open File if hidden).
-2. Change the hardware settings. Keep **CMake**, **Keep User Code when re-generating**
-   and the existing `ECHO/` output directory; leave Nucleo demo code disabled.
-3. Generate, then build from the repository root as usual. Review and commit the generated changes.
-
-Your `src/` and `include/` files stay separate from generation. CubeMX preserves the
-connection in `ECHO/Core/Src/main.c` inside its **USER CODE** blocks:
-
-- **Includes**: `#include "app.h"`
-- **WHILE**: `setup();` just before `while (1)`
-- **3**: `loop();` inside the loop
-
-The build reports an error if a connection disappears. Add any peripheral handles
-you need to `include/app.h`, e.g. `extern ADC_HandleTypeDef hadc1;` for ADC1.
-
-Windows builds are verified. The Mac launcher is checked on Windows, but still needs
-one real Mac/board check; live debugging and CubeMX regeneration are also untested.
+| Function | What it does |
+| --- | --- |
+| `select_range(range)` | Switches the MUX to the selected known resistor. |
+| `initialise_mux()` | Configures the MUX control pins and selects the first resistor. |
+| `initialise_adc()` | Calibrates the ADC and configures the divider voltage input. |
+| `read_adc(reading)` | Takes one ADC reading. Returns whether it succeeded. |
+| `find_optimal_known_resistor()` | Takes one reading per known resistor and selects the one closest to half the ADC range. Returns the selected range, or `-1` if all readings fail. |
+| `calculate_resistance(range, reading, resistance)` | Converts an ADC reading to resistance, including MUX resistance compensation. Rejects invalid ranges and saturated readings. |
+| `continuous_reading_loop()` | Selects the best resistor, stores one valid measurement in `resistance_ohms` and waits 500 ms. Called repeatedly for continuous readings. |
+| `read_average_20_seconds(average_ohms)` | Selects the best resistor once, then averages valid resistance readings spaced roughly 500 ms apart over 20 seconds. Stores the result in `average_ohms` and `resistance_ohms`; returns false if no valid readings are available. |
+| `setup()` | Initialises the MUX and ADC. |
+| `loop()` | Repeatedly calls continuous reading or 20-second averaging, depending on `use_20_second_average`. |

@@ -100,11 +100,14 @@ float capacitance_measure(void){
             t2 = DWT->CYCCNT;
             break;
         }
-        if (DWT->CYCCNT - start > timeout) return 0.0f;        
+        if (DWT->CYCCNT - start > timeout) {
+            discharge_capacitor();
+            return 0.0f;
+        }        
     }
-
+    discharge_capacitor();
     // calculate capacitance 
-    float dt = (t2 -t1) / SystemCoreClock;
+    float dt = (float)(t2 -t1) / SystemCoreClock;
     float C = capacitance_from_time(dt, 10000.0f);
     
     return C;

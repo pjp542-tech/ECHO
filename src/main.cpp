@@ -76,56 +76,45 @@ bool waitForEdge(){
 
 // Return one oscillation period in microseconds.
 // Return zero if the measurement fails.
-float measurePeriod(){
-    // Remove old captures from before/during the pulse.
-    __HAL_TIM_CLEAR_FLAG(
-        &htim2,
-        TIM_FLAG_CC2 | TIM_FLAG_CC2OF
-    );
+float measurePeriod()
+{
+__HAL_TIM_CLEAR_FLAG(&htim2, TIM_FLAG_CC2 | TIM_FLAG_CC2OF);
 
-    // Ignore the first edge after releasing the pulse.
-    if (waitForEdge() == false){
-        return 0.0f;
-    }
-
-    HAL_TIM_ReadCapturedValue(&htim2, TIM_CHANNEL_2);
-
-    if (__HAL_TIM_GET_FLAG(&htim2, TIM_FLAG_CC2OF) != RESET){
-        return 0.0f;
-    }
-
-    // Record the next rising edge.
-    if (waitForEdge() == false){
-        return 0.0f;
-    }
-
-    uint32_t firstEdge =
-        HAL_TIM_ReadCapturedValue(&htim2, TIM_CHANNEL_2);
-
-    if (__HAL_TIM_GET_FLAG(&htim2, TIM_FLAG_CC2OF) != RESET){
-        return 0.0f;
-    }
-
-    // Record the following rising edge.
-    if (waitForEdge() == false){
-        return 0.0f;
-    }
-
-    uint32_t secondEdge =
-        HAL_TIM_ReadCapturedValue(&htim2, TIM_CHANNEL_2);
-
-    // Reject the reading if a captured edge was overwritten.
-    if (__HAL_TIM_GET_FLAG(&htim2, TIM_FLAG_CC2OF) != RESET){
-        return 0.0f;
-    }
-
-    uint32_t elapsedTicks = secondEdge - firstEdge;
-
-    float period = elapsedTicks / ticksPerMicrosecond;
-
-    return period;
+if (!waitForEdge())
+{
+std::printf("Debug: no first edge\r\n");
+return 0.0f;
 }
 
+uint32_t firstEdge =
+HAL_TIM_ReadCapturedValue(&htim2, TIM_CHANNEL_2);
+
+if (__HAL_TIM_GET_FLAG(&htim2, TIM_FLAG_CC2OF) != RESET)
+{
+std::printf("Debug: capture overrun at first edge\r\n");
+return 0.0f;
+}
+
+if (!waitForEdge())
+{
+std::printf("Debug: first edge seen, no second edge\r\n");
+return 0.0f;
+}
+
+uint32_t secondEdge =
+HAL_TIM_ReadCapturedValue(&htim2, TIM_CHANNEL_2);
+
+if (__HAL_TIM_GET_FLAG(&htim2, TIM_FLAG_CC2OF) != RESET)
+{
+std::printf("Debug: capture overrun at second edge\r\n");
+return 0.0f;
+}
+
+uint32_t elapsedTicks = secondEdge - firstEdge;
+std::printf("Debug: %lu ticks\r\n", (unsigned long)elapsedTicks);
+
+return elapsedTicks / ticksPerMicrosecond;
+}
 
 // STARTUP
 void setup(void){
@@ -150,7 +139,7 @@ void loop(void){
 
     sendPulse();
 
-    float period = measurePeriod();
+    float period = measurePeriod() * 1.1f; // Add 10%.
 
     // Initial acceptance window: 5 to 100 microseconds.
     // This is a basic check, not proof of a valid measurement.

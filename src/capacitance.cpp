@@ -51,7 +51,8 @@ static void select_sense_channel(void){
     ADC_ChannelConfTypeDef ch = {};
     ch.Channel = ADC_CHANNEL_15;
     ch.Rank = ADC_REGULAR_RANK_1;
-    ch.SamplingTime = ADC_SAMPLETIME_6CYCLES_5;
+    // Allow more acquisition time for the ADC input to settle.
+    ch.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
     ch.SingleDiff = ADC_SINGLE_ENDED;
     ch.OffsetNumber = ADC_OFFSET_NONE;
     HAL_ADC_ConfigChannel(&hadc1, &ch);

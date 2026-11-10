@@ -18,4 +18,3 @@ void loop(void)
     HAL_Delay(1000);
     // Put your application code here.
 }
-//Treya commented

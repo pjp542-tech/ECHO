@@ -16,8 +16,8 @@ const uint32_t V1 = 819;
 const uint32_t V2 = 3276;
 // ln4
 const float ln4 = std::log(4.0f);
-// timeout vlaue about 6 seconds 
-const uint32_t timeout = 1000000000;
+// timeout of 6 seconds 
+const uint32_t timeout = 6000;
 
 void capacitance_init(void){
     // setup timer 
@@ -43,7 +43,6 @@ void capacitance_init(void){
     pin.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOB, &pin);
     HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-    
 }
 
 // sets up read ADC at pin d3
@@ -67,16 +66,20 @@ static uint32_t readAdc(void){
     return Adc_value;
 }
 
-// discharge cpacitor on d2
+static uint32_t timeout_cycles(void){
+    return (SystemCoreClock / 1000) * timeout;
+}
+
+// discharge capacitor on d2
 static void discharge_capacitor(void){
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_RESET);
     uint32_t start = DWT->CYCCNT;
     while (readAdc() > Capacitor_empty){
-        if (DWT->CYCCNT - start > timeout) return;
+        if (DWT->CYCCNT - start > timeout_cycles()) return;
     }
 }
 
-// calculates capcitance from charge time and resitance
+// calculates capacitance from charge time and resitance
 static float capacitance_from_time(float dt, float r){
     return dt / (r * ln4);
 }
@@ -84,9 +87,10 @@ static float capacitance_from_time(float dt, float r){
 
 float capacitance_measure(void){
 
-    // initliase vlaues for t1, t2 and voltage 
+    // initialiase values for t1, t2 and voltage 
     uint32_t t1 = 0, t2 = 0;
     uint32_t v = 0;
+    bool t1_ran = false;
 
     select_sense_channel();
     discharge_capacitor();
@@ -94,14 +98,15 @@ float capacitance_measure(void){
     uint32_t start = DWT->CYCCNT;
     while (true){
         v = readAdc();
-        if (t1 == 0 && v >= V1){
+        if (!t1_ran && v >= V1){
             t1 = DWT->CYCCNT;
+            t1_ran = true;
         }
         if (v >= V2){
             t2 = DWT->CYCCNT;
             break;
         }
-        if (DWT->CYCCNT - start > timeout) {
+        if (DWT->CYCCNT - start > timeout_cycles()) {
             discharge_capacitor();
             return 0.0f;
         }        

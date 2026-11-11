@@ -7,19 +7,26 @@
 void setup(void)
 {
     capacitance_init();
-    // Put your initialisation code here.
 }
 
 // Runs repeatedly.
 void loop(void)
 {
-    float c = capacitance_measure();
-    if (c > 0){
-        std::printf("C = %lu pF\r\n", (unsigned long)(c * 1e12f + 0.5f));
+    float C = capacitance_measure();
+    if (C > 0){
+        std::printf("C = %lu pF\r\n", (unsigned long)(C * 1e12f + 0.5f));
     }
-    else {
-        std::printf("errorcode: %d \r\n", (int)(c));
+    else if (C == -1) {
+
+        std::printf("capacitance out of range: too large \r\n");
+    }
+    else if (C == -2) {
+
+        std::printf("capacitance out of range: too small \r\n");
+    }
+    else{
+
+        std::printf("unexpected error: %d \r\n", (int)(C));
     }
     HAL_Delay(1000); 
-    // Put your application code here.
 }

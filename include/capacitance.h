@@ -5,9 +5,6 @@ enum cap_meter_error_codes{
     cap_ok = 0,
     cap_too_large = -1,
     cap_too_small = -2,
-    cap_charge_timeout = -3,
-    cap_discharge_timeout = -4,
-    adc_fault = -5,
  };
 
 // once to initiate at setup

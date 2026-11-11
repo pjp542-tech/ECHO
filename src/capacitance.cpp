@@ -31,8 +31,8 @@ static const uint32_t V2 = 3276;
 static const float ln4 = std::log(4.0f);
 // ln0.8
 static const float ln0_8 = std::log(0.8f);
-// timeout of 6 seconds 
-static const uint32_t timeout = 6000;
+// timeout of 8 seconds 
+static const uint32_t timeout = 8000;
 // minium time of 1 ms
 static const float minium_time = 1e-3f;
 // minium capacitance readable 
@@ -101,16 +101,15 @@ static void range_on(int i){
     HAL_GPIO_Init(pins[i].port, &pin);
 }
 
-// discharge capacitor on d2
-static bool discharge_capacitor(uint32_t i){
+// prepare capacitor
+static bool discharge_capacitor(uint32_t i, uint32_t v){
     HAL_GPIO_WritePin(pins[i].port, pins[i].pin, GPIO_PIN_RESET);
     uint32_t start = DWT->CYCCNT;
-    while (read_adc() > Capacitor_empty){
+    while (read_adc() >= v){ 
         if (DWT->CYCCNT - start > timeout_cycles(timeout)) return false;
     }
     return true;
 }
-
 
 // sets up read ADC at pin d3
 static void select_sense_channel(void){
@@ -129,69 +128,24 @@ static float capacitance_from_time(float dt, float r){
     return dt / (r * ln4);
 }
 
-// estimates the capacintance based on charge time to 20 percent 
-static uint32_t optimum_resistor(void){
-    uint32_t t = 0;
+// estimates the capacitance based on charge time from 20 to 80 percent using the smallest resistor  
+static uint32_t charge_measure(void){
+    uint32_t t1 = 0, t2 =0;
+    bool t1_ran = false, t2_ran = false;
     uint32_t v = 0;
-    range_on(1);
-    if (!discharge_capacitor(1)) {
+    uint32_t optimum_resistor = 3;
+    
+    range_on(0);
+
+    if (!discharge_capacitor(0, V1 - 100)) {
         ground_pins();
-        err = cap_discharge_timeout;
+        err = cap_too_large; // timeout on smallest resistor means its too large 
         return 0; 
     }
-    HAL_GPIO_WritePin(pins[1].port, pins[1].pin, GPIO_PIN_SET);
+
     uint32_t start = DWT->CYCCNT;
-    while (true){
-        v = read_adc();
-        if (v >= V1){
-            t = DWT->CYCCNT;
-            break;
-        }
-        if (DWT->CYCCNT - start > timeout_cycles(timeout)){
-            ground_pins();
-            // timeout picks smallest resistor
-            return 0;
-        }
-    }
     
-    discharge_capacitor(1);
-
-    float dt = (float)(t - start) / SystemCoreClock;
-    float C = -dt / (pins[1].ohms * ln0_8);
-    for (int i=0; i<3; i++){
-        const float expected_time = ln4 * pins[i].ohms * C;
-        if (expected_time >= minium_time){
-            ground_pins();
-            return i;
-        }
-    }
-    ground_pins();
-    return 3;
-}
-
-float capacitance_measure(void){
-
-    // reset error code
-    err = cap_ok;
-
-    // initialiase values for t1, t2 and voltage 
-    uint32_t t1 = 0, t2 = 0;
-    uint32_t v = 0;
-    bool t1_ran = false;
-    
-    select_sense_channel();
-    const uint32_t i = optimum_resistor();
-    if (err != cap_ok) return err; 
-    
-    range_on(i);
-    if (!discharge_capacitor(i)) {
-        ground_pins(); 
-        return cap_discharge_timeout;
-    }
-    
-    HAL_GPIO_WritePin(pins[i].port, pins[i].pin, GPIO_PIN_SET);
-    
-    uint32_t start = DWT->CYCCNT;
+    HAL_GPIO_WritePin(pins[0].port, pins[0].pin, GPIO_PIN_SET);
     
     while (true){
         v = read_adc();
@@ -199,23 +153,83 @@ float capacitance_measure(void){
             t1 = DWT->CYCCNT;
             t1_ran = true;
         }
-        if (v >= V2){
+        if (!t2_ran && v >= V2){
             t2 = DWT->CYCCNT;
+            t2_ran = true;
+        }
+        if (v >= V2 +100){
             break;
         }
         if (DWT->CYCCNT - start > timeout_cycles(timeout)) {
-            discharge_capacitor(i);
+            discharge_capacitor(0, Capacitor_empty);
             ground_pins(); 
-            return cap_too_large;
+            err = cap_too_large; // timeout on smallest resistor means its too large 
+            return 0;
         }        
-    }
-    
-    discharge_capacitor(i);
-    ground_pins();
+    }   
 
     // calculate capacitance 
     float dt = (float)(t2 -t1) / SystemCoreClock;
-    float C = capacitance_from_time(dt, pins[i].ohms);
+    float C = capacitance_from_time(dt, pins[0].ohms);
+    
+    for (int i=0; i<3; i++){
+        const float expected_time = ln4 * pins[i].ohms * C;
+        if (expected_time >= minium_time){
+            optimum_resistor = i;
+            break;
+        }
+    }
+    ground_pins();
+    return optimum_resistor;
+}
+
+static float discharge_measure(uint32_t optimum_resistor){
+    uint32_t t1 = 0, t2 =0;
+    uint32_t v = 0;
+    bool t2_ran = false;
+    range_on(optimum_resistor);
+
+    uint32_t start = DWT->CYCCNT;
+    
+    HAL_GPIO_WritePin(pins[optimum_resistor].port, pins[optimum_resistor].pin, GPIO_PIN_RESET);
+    
+    while (true){
+        v = read_adc();
+        if (!t2_ran && v <= V2){
+            t2 = DWT->CYCCNT;
+            t2_ran = true;
+        }
+        if (v <= V1){
+            t1 = DWT->CYCCNT;
+            break;
+        }
+        if (DWT->CYCCNT - start > timeout_cycles(timeout)) {
+            discharge_capacitor(optimum_resistor, Capacitor_empty);
+            ground_pins(); 
+            err = cap_too_large; 
+            return 0;
+        }        
+    }   
+
+    // calculate capacitance 
+    float dt = (float)(t1 - t2) / SystemCoreClock;
+    float C = capacitance_from_time(dt, pins[optimum_resistor].ohms);
+
+    ground_pins();
+    return C;
+}
+
+float capacitance_measure(void){
+
+    // reset error code
+    err = cap_ok;
+    
+    select_sense_channel();
+    
+    uint32_t optimum_resistor = charge_measure();
+    if (err != cap_ok) return err; 
+    float C = discharge_measure(optimum_resistor);
+    if (err != cap_ok) return err; 
     
     if(C < minium_cap){
         return cap_too_small;

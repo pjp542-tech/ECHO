@@ -20,6 +20,7 @@
     "cmake.useCMakePresets": "always",
     "editor.tabSize": 4,
     "files.associations": {
-        "*.h": "c"
+        "*.h": "c",
+        "capacitance.h": "cpp"
     }
 }

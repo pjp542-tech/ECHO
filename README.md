@@ -7,7 +7,56 @@
 - **`include/`**: put shared headers here. Include `app.h` to use the STM32 HAL.
 - **`ECHO/`**: generated board setup and drivers. Hidden in VS Code; normally leave it alone.
 
-The starter application is empty. The existing Nucleo pin/peripheral configuration is retained.
+## Capacitance meter
+
+`include/capacitance.h` declares `CapacitanceMeter`; `src/capacitance.cpp`
+contains the hardware control, timing algorithm and resistor calibration.
+The public operations match the resistance meter:
+
+| Operation | Purpose |
+| --- | --- |
+| `CapacitanceMeter(ADC_HandleTypeDef &adc)` | Store the ADC reference; no hardware access |
+| `activate()` | Configure sense input, ADC channel/calibration, resistor pins and cycle counter |
+| `read_measurement()` | Return one capacitance measurement in farads as a float |
+| `deactivate()` | Stop ADC conversions and leave all resistor pins high impedance |
+
+```cpp
+CapacitanceMeter c(hadc1);
+// After CubeMX hardware initialisation:
+if (c.activate() == CapacitanceMeter::Status::Ok) {
+    float capacitance = c.read_measurement();
+    // Use capacitance here; check std::isnan(capacitance) for failure.
+}
+c.deactivate(); // Before selecting another meter.
+```
+
+Readings return `NAN` if inactive, ADC conversion fails, a measurement phase
+times out, or capacitance is below 100 pF. Include `<cmath>` to use
+`std::isnan`. The former negative error codes and free functions are removed.
+Activation returns a status so the application can handle setup failures.
+
+`src/main.cpp` uses object `c` and variable `capacitance`, with no serial
+printing, averaging or application delay. Measurement calls are blocking;
+individual charge/discharge phases retain the existing 8-second timeout.
+The application should schedule calls and handle failed readings as needed.
+
+The existing 20%-to-80% charging estimate selects a resistor; the final
+80%-to-20% discharge interval gives `C = time / (R * ln(4))`. Calibration
+values remain at the top of `src/capacitance.cpp`:
+
+| Resistor | MCU pin |
+| --- | --- |
+| 1 kOhm | PA9 |
+| 10 kOhm | PA12 |
+| 100 kOhm | PB6 |
+| 1 MOhm | PA7 |
+
+Sense input remains PB0 (D3), ADC1 channel 15. Deactivate the previous meter
+before activating this one when sharing the ADC. The ADC must already be
+initialised for single software-triggered 12-bit conversions by CubeMX.
+The DWT cycle counter is shared: activation enables it without resetting it,
+and deactivation leaves it running. High-impedance idle stops excitation;
+it does not guarantee that a connected capacitor is fully discharged.
 
 ## Build and run (Windows or Mac)
 

@@ -1,17 +1,40 @@
 #ifndef ECHO_CAPACITANCE_H
 #define ECHO_CAPACITANCE_H
 
-// error codes returned by capacintance measure
-enum cap_meter_error_codes{
-    cap_ok = 0,
-    cap_too_large = -1,
-    cap_too_small = -2,
- };
+#include "stm32g4xx_hal.h"
+#include <cstdint>
 
-// once to initiate at setup
-void capacitance_init(void);
+// Owns ADC1 channel 15 (PB0) and the four resistor pins while active.
+class CapacitanceMeter
+{
+public:
+    enum class Status
+    {
+        Ok,
+        CalibrationFailed,
+        ChannelConfigurationFailed
+    };
 
-// measures capacitance in farads, returns error codes if out of range 
-float capacitance_measure(void);
+    // Stores the ADC reference only; no hardware access during construction.
+    explicit CapacitanceMeter(ADC_HandleTypeDef &adc);
+    // Call after CubeMX has initialised the ADC and its clocks.
+    Status activate();
+    // Blocking measurement in farads. NAN means inactive, ADC failure,
+    // timeout or capacitance below the supported minimum.
+    float read_measurement();
+    // Stop excitation and ADC conversions; resistor pins become high impedance.
+    void deactivate();
+
+private:
+    void release_pins();
+    void select_range(uint32_t range);
+    bool read_adc(uint32_t &value);
+    bool discharge_capacitor(uint32_t range, uint32_t threshold);
+    bool charge_measure(uint32_t &range);
+    bool discharge_measure(uint32_t range, float &capacitance);
+
+    ADC_HandleTypeDef &adc_;
+    bool active_ = false;
+};
 
 #endif

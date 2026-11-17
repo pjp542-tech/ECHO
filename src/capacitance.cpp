@@ -1,229 +1,228 @@
 #include "capacitance.h"
-#include "app.h"
+#include <limits>
 
-#include <cmath>
+namespace
+{
+constexpr uint32_t capacitor_empty = 30;
+constexpr uint32_t low_threshold = 819;   // 20% of 12-bit full scale.
+constexpr uint32_t high_threshold = 3276; // 80% of 12-bit full scale.
+constexpr float ln4 = 1.38629436112f;
+constexpr uint32_t timeout_ms = 8000;
+constexpr float minimum_time = 1e-3f;
+constexpr float minimum_capacitance = 1e-10f;
 
-// sets handler for adc1
-extern "C" {
-    extern ADC_HandleTypeDef hadc1;
-}
-
-// <1 percent voltage threshold
-static const uint32_t Capacitor_empty = 30;
-// 20 percent voltage threshold
-static const uint32_t V1 = 819;
-// 80 percent voltage threshold
-static const uint32_t V2 = 3276;
-// ln4
-static const float ln4 = std::log(4.0f);
-// timeout of 8 seconds 
-static const uint32_t timeout = 8000;
-// minimum time of 1 ms
-static const float minimum_time = 1e-3f;
-// minimum capacitance readable 
-static const float minimum_cap = 1e-10f;
-// err 
-static enum cap_meter_error_codes err = cap_ok;
-
-typedef struct{
+struct RangePin
+{
     GPIO_TypeDef *port;
-    uint32_t pin;
+    uint16_t pin;
     float ohms;
-} pin_struct;
+};
 
-static const pin_struct pins[4] = {
+// Edit resistor calibration values here, in ohms.
+const RangePin pins[] = {
     {GPIOA, GPIO_PIN_9, 1000.0f},
-    {GPIOA, GPIO_PIN_12, 10000.0f}, 
+    {GPIOA, GPIO_PIN_12, 10000.0f},
     {GPIOB, GPIO_PIN_6, 100000.0f},
     {GPIOA, GPIO_PIN_7, 1000000.0f}
 };
+constexpr uint32_t range_count = sizeof(pins) / sizeof(pins[0]);
 
-static void ground_pins(void){
-    for (int i=0; i<4; i++){
+uint32_t timeout_cycles()
+{
+    return (SystemCoreClock / 1000) * timeout_ms;
+}
+}
+
+CapacitanceMeter::CapacitanceMeter(ADC_HandleTypeDef &adc) : adc_(adc)
+{
+}
+
+void CapacitanceMeter::release_pins()
+{
+    for (const auto &range : pins)
+    {
         GPIO_InitTypeDef pin = {};
-        pin.Pin = pins[i].pin;
+        pin.Pin = range.pin;
         pin.Mode = GPIO_MODE_ANALOG;
-        pin.Pull =GPIO_NOPULL;
-        HAL_GPIO_Init(pins[i].port, &pin);
+        pin.Pull = GPIO_NOPULL;
+        HAL_GPIO_Init(range.port, &pin);
+        HAL_GPIO_WritePin(range.port, range.pin, GPIO_PIN_RESET);
     }
 }
 
-static uint32_t timeout_cycles(uint32_t time){
-    return (SystemCoreClock / 1000) * time;
-}
-
-// reads ADC value
-static uint32_t read_adc(void){
-    HAL_ADC_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, 1);
-    uint32_t Adc_value = HAL_ADC_GetValue(&hadc1);
-    HAL_ADC_Stop(&hadc1);
-    return Adc_value;
-}
-
-static void range_on(int i){
+void CapacitanceMeter::select_range(uint32_t range)
+{
+    release_pins();
     GPIO_InitTypeDef pin = {};
-    pin.Pin = pins[i].pin;
-    pin.Mode = GPIO_MODE_OUTPUT_PP; 
+    pin.Pin = pins[range].pin;
+    pin.Mode = GPIO_MODE_OUTPUT_PP;
     pin.Pull = GPIO_NOPULL;
     pin.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_WritePin(pins[i].port, pins[i].pin, GPIO_PIN_RESET); 
-    HAL_GPIO_Init(pins[i].port, &pin);
+    HAL_GPIO_WritePin(pins[range].port, pins[range].pin, GPIO_PIN_RESET);
+    HAL_GPIO_Init(pins[range].port, &pin);
 }
 
-// prepare capacitor
-static bool discharge_capacitor(uint32_t i, uint32_t v){
-    HAL_GPIO_WritePin(pins[i].port, pins[i].pin, GPIO_PIN_RESET);
-    uint32_t start = DWT->CYCCNT;
-    while (read_adc() >= v){ 
-        if (DWT->CYCCNT - start > timeout_cycles(timeout)) return false;
+CapacitanceMeter::Status CapacitanceMeter::activate()
+{
+    deactivate();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    release_pins();
+
+    GPIO_InitTypeDef sense = {};
+    sense.Pin = GPIO_PIN_0;
+    sense.Mode = GPIO_MODE_ANALOG;
+    sense.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOB, &sense);
+    if (HAL_ADCEx_Calibration_Start(&adc_, ADC_SINGLE_ENDED) != HAL_OK)
+        return Status::CalibrationFailed;
+
+    ADC_ChannelConfTypeDef channel = {};
+    channel.Channel = ADC_CHANNEL_15; // PB0 / board D3.
+    channel.Rank = ADC_REGULAR_RANK_1;
+    channel.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
+    channel.SingleDiff = ADC_SINGLE_ENDED;
+    channel.OffsetNumber = ADC_OFFSET_NONE;
+    if (HAL_ADC_ConfigChannel(&adc_, &channel) != HAL_OK)
+        return Status::ChannelConfigurationFailed;
+
+    // DWT is shared CPU timing hardware. Enable it without resetting the
+    // counter; elapsed-time subtraction also handles counter wraparound.
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    active_ = true;
+    return Status::Ok;
+}
+
+bool CapacitanceMeter::read_adc(uint32_t &value)
+{
+    if (HAL_ADC_Start(&adc_) != HAL_OK)
+        return false;
+    const bool ready = HAL_ADC_PollForConversion(&adc_, 1) == HAL_OK;
+    if (ready)
+        value = HAL_ADC_GetValue(&adc_);
+    const bool stopped = HAL_ADC_Stop(&adc_) == HAL_OK;
+    return ready && stopped;
+}
+
+bool CapacitanceMeter::discharge_capacitor(uint32_t range, uint32_t threshold)
+{
+    HAL_GPIO_WritePin(pins[range].port, pins[range].pin, GPIO_PIN_RESET);
+    const uint32_t start = DWT->CYCCNT;
+    while (true)
+    {
+        uint32_t value = 0;
+        if (!read_adc(value))
+            return false;
+        if (value < threshold)
+            return true;
+        if (DWT->CYCCNT - start > timeout_cycles())
+            return false;
     }
+}
+
+bool CapacitanceMeter::charge_measure(uint32_t &range)
+{
+    select_range(0);
+    if (!discharge_capacitor(0, low_threshold - 100))
+        return false;
+
+    uint32_t t1 = 0, t2 = 0;
+    bool crossed_low = false, crossed_high = false;
+    const uint32_t start = DWT->CYCCNT;
+    HAL_GPIO_WritePin(pins[0].port, pins[0].pin, GPIO_PIN_SET);
+    while (true)
+    {
+        uint32_t value = 0;
+        if (!read_adc(value))
+            return false;
+        if (!crossed_low && value >= low_threshold)
+        {
+            t1 = DWT->CYCCNT;
+            crossed_low = true;
+        }
+        if (!crossed_high && value >= high_threshold)
+        {
+            t2 = DWT->CYCCNT;
+            crossed_high = true;
+        }
+        if (value >= high_threshold + 100)
+            break;
+        if (DWT->CYCCNT - start > timeout_cycles())
+        {
+            discharge_capacitor(0, capacitor_empty);
+            return false;
+        }
+    }
+
+    const float seconds = static_cast<float>(t2 - t1) / SystemCoreClock;
+    const float estimate = seconds / (pins[0].ohms * ln4);
+    range = range_count - 1;
+    for (uint32_t i = 0; i < range_count - 1; ++i)
+    {
+        if (ln4 * pins[i].ohms * estimate >= minimum_time)
+        {
+            range = i;
+            break;
+        }
+    }
+    release_pins();
     return true;
 }
 
-// sets up read ADC at pin d3
-static void select_sense_channel(void){
-    ADC_ChannelConfTypeDef ch = {};
-    ch.Channel = ADC_CHANNEL_15;
-    ch.Rank = ADC_REGULAR_RANK_1;
-    // Allow more acquisition time for the ADC input to settle.
-    ch.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
-    ch.SingleDiff = ADC_SINGLE_ENDED;
-    ch.OffsetNumber = ADC_OFFSET_NONE;
-    HAL_ADC_ConfigChannel(&hadc1, &ch);
-}
-
-// calculates capacitance from charge time and resitance
-static float capacitance_from_time(float dt, float r){
-    return dt / (r * ln4);
-}
-
-// estimates the capacitance based on charge time from 20 to 80 percent using the smallest resistor  
-static uint32_t charge_measure(void){
-    uint32_t t1 = 0, t2 =0;
-    bool t1_ran = false, t2_ran = false;
-    uint32_t v = 0;
-    uint32_t optimum_resistor = 3; // defaults to the largest resistor 
-    
-    range_on(0);
-    
-    if (!discharge_capacitor(0, V1 - 100)) {
-        ground_pins();
-        err = cap_too_large; // timeout on smallest resistor means its too large 
-        return 0; 
-    }
-    
-    uint32_t start = DWT->CYCCNT;
-    
-    HAL_GPIO_WritePin(pins[0].port, pins[0].pin, GPIO_PIN_SET);
-    
-    while (true){
-        v = read_adc();
-        if (!t1_ran && v >= V1){
-            t1 = DWT->CYCCNT;
-            t1_ran = true;
-        }
-        if (!t2_ran && v >= V2){
+bool CapacitanceMeter::discharge_measure(uint32_t range, float &capacitance)
+{
+    uint32_t t1 = 0, t2 = 0;
+    bool crossed_high = false;
+    select_range(range); // Start discharging through the selected resistor.
+    const uint32_t start = DWT->CYCCNT;
+    while (true)
+    {
+        uint32_t value = 0;
+        if (!read_adc(value))
+            return false;
+        if (!crossed_high && value <= high_threshold)
+        {
             t2 = DWT->CYCCNT;
-            t2_ran = true;
+            crossed_high = true;
         }
-        if (v >= V2 +100){
-            break;
-        }
-        if (DWT->CYCCNT - start > timeout_cycles(timeout)) {
-            discharge_capacitor(0, Capacitor_empty);
-            ground_pins(); 
-            err = cap_too_large; // timeout on smallest resistor means its too large 
-            return 0;
-        }        
-    }   
-    
-    // calculate capacitance 
-    float dt = (float)(t2 -t1) / SystemCoreClock;
-    float C = capacitance_from_time(dt, pins[0].ohms);
-    
-    for (int i=0; i<3; i++){
-        const float expected_time = ln4 * pins[i].ohms * C;
-        if (expected_time >= minimum_time){
-            optimum_resistor = i;
-            break;
-        }
-    }
-    ground_pins();
-    return optimum_resistor;
-}
-
-static float discharge_measure(uint32_t optimum_resistor){
-    uint32_t t1 = 0, t2 =0;
-    uint32_t v = 0;
-    bool t2_ran = false;
-    range_on(optimum_resistor);
-    
-    uint32_t start = DWT->CYCCNT;
-    
-    HAL_GPIO_WritePin(pins[optimum_resistor].port, pins[optimum_resistor].pin, GPIO_PIN_RESET);
-    
-    while (true){
-        v = read_adc();
-        if (!t2_ran && v <= V2){
-            t2 = DWT->CYCCNT;
-            t2_ran = true;
-        }
-        if (v <= V1){
+        if (value <= low_threshold)
+        {
             t1 = DWT->CYCCNT;
             break;
         }
-        if (DWT->CYCCNT - start > timeout_cycles(timeout)) {
-            discharge_capacitor(optimum_resistor, Capacitor_empty);
-            ground_pins(); 
-            err = cap_too_large; 
-            return 0;
-        }        
-    }   
-    
-    // calculate capacitance 
-    float dt = (float)(t1 - t2) / SystemCoreClock;
-    float C = capacitance_from_time(dt, pins[optimum_resistor].ohms);
-    
-    ground_pins();
-    return C;
-}
-
-void capacitance_init(void){
-    // setup timer 
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CYCCNT = 0;
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-    // initalise clocks
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    __HAL_RCC_GPIOB_CLK_ENABLE();
-    // switch off resistor pins
-    ground_pins();
-    // initalise d3
-    GPIO_InitTypeDef pin = {};
-    pin.Pin = GPIO_PIN_0;
-    pin.Mode = GPIO_MODE_ANALOG;
-    pin.Pull = GPIO_NOPULL;
-    pin.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOB, &pin);
-    HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-}
-
-float capacitance_measure(void){
-    
-    // reset error code
-    err = cap_ok;
-    
-    select_sense_channel();
-    
-    uint32_t optimum_resistor = charge_measure();
-    if (err != cap_ok) return err; 
-    float C = discharge_measure(optimum_resistor);
-    if (err != cap_ok) return err; 
-    
-    if(C < minimum_cap){
-        return cap_too_small;
+        if (DWT->CYCCNT - start > timeout_cycles())
+        {
+            discharge_capacitor(range, capacitor_empty);
+            return false;
+        }
     }
-    
-    return C;
+    const float seconds = static_cast<float>(t1 - t2) / SystemCoreClock;
+    capacitance = seconds / (pins[range].ohms * ln4);
+    return true;
+}
+
+float CapacitanceMeter::read_measurement()
+{
+    constexpr float invalid = std::numeric_limits<float>::quiet_NaN();
+    if (!active_)
+        return invalid;
+
+    uint32_t range = 0;
+    float capacitance = 0;
+    const bool valid = charge_measure(range) && discharge_measure(range, capacitance);
+    release_pins(); // Stop excitation on every success, timeout or ADC failure.
+    if (!valid || capacitance < minimum_capacitance)
+        return invalid;
+    return capacitance;
+}
+
+void CapacitanceMeter::deactivate()
+{
+    if (!active_)
+        return;
+    release_pins();
+    HAL_ADC_Stop(&adc_);
+    active_ = false;
+    // Leave the shared DWT counter running for other meters/debugging.
 }

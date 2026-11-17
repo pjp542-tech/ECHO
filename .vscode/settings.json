@@ -21,7 +21,8 @@
     "editor.tabSize": 4,
     "files.associations": {
         "*.h": "c",
-        "inductance.h": "cpp"
-        "resistance.h": "cpp"
+        "inductance.h": "cpp",
+        "resistance.h": "cpp",
+        "capacitance.h": "cpp"
     }
 }

@@ -1,13 +1,17 @@
 #include "app.h"
 #include "resistance.h"
 #include "inductance.h"
+#include "capacitance.h"
+#include "lcd.h"
+
+
+I2C_LCD_HandleTypeDef lcd1 = {&hi2c1, 0x27 << 1};
 
 typedef struct __TIM_HandleTypeDef TIM_HandleTypeDef;
 
 extern "C" {
 extern TIM_HandleTypeDef htim2;
 
-#include "capacitance.h"
 
 extern "C" {
 extern ADC_HandleTypeDef hadc1;
@@ -27,6 +31,9 @@ void setup(void)
     if (r.activate() != ResistanceMeter::Status::Ok)
     if (c.activate() != CapacitanceMeter::Status::Ok)
         Error_Handler();
+
+    lcd_init(&lcd1);
+
 }
 
 void loop(void)

@@ -20,11 +20,12 @@ target_include_directories(ECHO PRIVATE include)
 
 # Keep using CubeMX's source list, including any newly enabled peripherals.
 include(cmake/check-app-hooks.cmake)
-add_subdirectory(ECHO/cmake/stm32cubemx)
+add_subdirectory(cmake/stm32cubemx)
 target_link_libraries(ECHO stm32cubemx)
 
-set(LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/ECHO/STM32G431xx_FLASH.ld")
+set(LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/STM32G431xx_FLASH.ld")
 target_link_options(ECHO PRIVATE
+    -u _printf_float
     "-T${LINKER_SCRIPT}"
     "-Wl,-Map=${CMAKE_CURRENT_BINARY_DIR}/ECHO.map"
     -Wl,--gc-sections

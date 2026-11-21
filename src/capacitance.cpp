@@ -11,21 +11,11 @@ constexpr uint32_t timeout_ms = 8000;
 constexpr float minimum_time = 1e-3f;
 constexpr float minimum_capacitance = 1e-10f;
 
-struct RangePin
-{
-    GPIO_TypeDef *port;
-    uint16_t pin;
-    float ohms;
-};
-
-// Edit resistor calibration values here, in ohms.
-const RangePin pins[] = {
-    {GPIOA, GPIO_PIN_9, 1000.0f},
-    {GPIOA, GPIO_PIN_12, 10000.0f},
-    {GPIOB, GPIO_PIN_6, 100000.0f},
-    {GPIOA, GPIO_PIN_7, 1000000.0f}
-};
-constexpr uint32_t range_count = sizeof(pins) / sizeof(pins[0]);
+// Calibration stays with the algorithm; physical pins live in HardwareManager.
+constexpr float reference_ohms[] = {1000.0f, 10000.0f, 100000.0f, 1000000.0f};
+const auto &pins = BoardPins::rc_ranges;
+constexpr uint32_t range_count = sizeof(reference_ohms) / sizeof(reference_ohms[0]);
+static_assert(range_count == sizeof(BoardPins::rc_ranges) / sizeof(Pin));
 
 uint32_t timeout_cycles()
 {
@@ -33,7 +23,8 @@ uint32_t timeout_cycles()
 }
 }
 
-CapacitanceMeter::CapacitanceMeter(ADC_HandleTypeDef &adc) : adc_(adc)
+CapacitanceMeter::CapacitanceMeter(HardwareManager &hardware)
+    : hardware_(hardware), adc_(hardware.adc())
 {
 }
 
@@ -64,45 +55,45 @@ void CapacitanceMeter::select_range(uint32_t range)
 
 CapacitanceMeter::Status CapacitanceMeter::activate()
 {
-    deactivate();
+    if (active_)
+        return Status::Ok;
+    if (!hardware_.try_acquire(this))
+        return Status::HardwareUnavailable;
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
     release_pins();
 
-    GPIO_InitTypeDef sense = {};
-    sense.Pin = GPIO_PIN_0;
-    sense.Mode = GPIO_MODE_ANALOG;
-    sense.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(GPIOB, &sense);
-    if (HAL_ADCEx_Calibration_Start(&adc_, ADC_SINGLE_ENDED) != HAL_OK)
-        return Status::CalibrationFailed;
-
-    ADC_ChannelConfTypeDef channel = {};
-    channel.Channel = ADC_CHANNEL_15; // PB0 / board D3.
-    channel.Rank = ADC_REGULAR_RANK_1;
-    channel.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
-    channel.SingleDiff = ADC_SINGLE_ENDED;
-    channel.OffsetNumber = ADC_OFFSET_NONE;
-    if (HAL_ADC_ConfigChannel(&adc_, &channel) != HAL_OK)
+    if (!hardware_.configure_adc(BoardPins::capacitance_sense,
+                                 BoardPins::capacitance_channel,
+                                 ADC_SAMPLETIME_47CYCLES_5)) {
+        hardware_.release(this);
         return Status::ChannelConfigurationFailed;
+    }
 
-    // DWT is shared CPU timing hardware. Enable it without resetting the
-    // counter; elapsed-time subtraction also handles counter wraparound.
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
     active_ = true;
     return Status::Ok;
 }
 
 bool CapacitanceMeter::read_adc(uint32_t &value)
 {
-    if (HAL_ADC_Start(&adc_) != HAL_OK)
+    if (HAL_ADC_Start(&adc_) != HAL_OK) {
+        error_ = MeasurementResult::failure(MeasurementStatus::AdcError, "Capacitance ADC start failed");
         return false;
-    const bool ready = HAL_ADC_PollForConversion(&adc_, 1) == HAL_OK;
-    if (ready)
+    }
+    const auto conversion = HAL_ADC_PollForConversion(&adc_, 1);
+    if (conversion == HAL_OK)
         value = HAL_ADC_GetValue(&adc_);
-    const bool stopped = HAL_ADC_Stop(&adc_) == HAL_OK;
-    return ready && stopped;
+    if (HAL_ADC_Stop(&adc_) != HAL_OK) {
+        error_ = MeasurementResult::failure(MeasurementStatus::AdcError, "Capacitance ADC stop failed");
+        return false;
+    }
+    if (conversion != HAL_OK) {
+        error_ = MeasurementResult::failure(
+            conversion == HAL_TIMEOUT ? MeasurementStatus::Timeout : MeasurementStatus::AdcError,
+            conversion == HAL_TIMEOUT ? "Capacitance ADC timeout" : "Capacitance ADC failed");
+        return false;
+    }
+    return true;
 }
 
 bool CapacitanceMeter::discharge_capacitor(uint32_t range, uint32_t threshold)
@@ -116,8 +107,11 @@ bool CapacitanceMeter::discharge_capacitor(uint32_t range, uint32_t threshold)
             return false;
         if (value < threshold)
             return true;
-        if (DWT->CYCCNT - start > timeout_cycles())
+        if (DWT->CYCCNT - start > timeout_cycles()) {
+            timeout_details_ = TimeoutDetails{value, threshold, static_cast<uint32_t>(reference_ohms[range])};
+            error_ = MeasurementResult::failure(MeasurementStatus::Timeout, "Capacitor discharge timeout");
             return false;
+        }
     }
 }
 
@@ -129,6 +123,7 @@ bool CapacitanceMeter::charge_measure(uint32_t &range)
 
     uint32_t t1 = 0, t2 = 0;
     bool crossed_low = false, crossed_high = false;
+    constexpr uint32_t charge_target = high_threshold + 100;
     const uint32_t start = DWT->CYCCNT;
     HAL_GPIO_WritePin(pins[0].port, pins[0].pin, GPIO_PIN_SET);
     while (true)
@@ -146,21 +141,23 @@ bool CapacitanceMeter::charge_measure(uint32_t &range)
             t2 = DWT->CYCCNT;
             crossed_high = true;
         }
-        if (value >= high_threshold + 100)
+        if (value >= charge_target)
             break;
         if (DWT->CYCCNT - start > timeout_cycles())
         {
             discharge_capacitor(0, capacitor_empty);
+            timeout_details_ = TimeoutDetails{value, charge_target, static_cast<uint32_t>(reference_ohms[0])};
+            error_ = MeasurementResult::failure(MeasurementStatus::Timeout, "Capacitor charge timeout");
             return false;
         }
     }
 
     const float seconds = static_cast<float>(t2 - t1) / SystemCoreClock;
-    const float estimate = seconds / (pins[0].ohms * ln4);
+    const float estimate = seconds / (reference_ohms[0] * ln4);
     range = range_count - 1;
     for (uint32_t i = 0; i < range_count - 1; ++i)
     {
-        if (ln4 * pins[i].ohms * estimate >= minimum_time)
+        if (ln4 * reference_ohms[i] * estimate >= minimum_time)
         {
             range = i;
             break;
@@ -194,27 +191,32 @@ bool CapacitanceMeter::discharge_measure(uint32_t range, float &capacitance)
         if (DWT->CYCCNT - start > timeout_cycles())
         {
             discharge_capacitor(range, capacitor_empty);
+            timeout_details_ = TimeoutDetails{value, low_threshold, static_cast<uint32_t>(reference_ohms[range])};
+            error_ = MeasurementResult::failure(MeasurementStatus::Timeout, "Capacitance timing timeout");
             return false;
         }
     }
     const float seconds = static_cast<float>(t1 - t2) / SystemCoreClock;
-    capacitance = seconds / (pins[range].ohms * ln4);
+    capacitance = seconds / (reference_ohms[range] * ln4);
     return true;
 }
 
-float CapacitanceMeter::read_measurement()
+MeasurementResult CapacitanceMeter::read_measurement()
 {
-    constexpr float invalid = std::numeric_limits<float>::quiet_NaN();
+    error_ = {};
+    timeout_details_.reset();
     if (!active_)
-        return invalid;
+        return MeasurementResult::failure(MeasurementStatus::Inactive, "Capacitance inactive");
 
     uint32_t range = 0;
     float capacitance = 0;
     const bool valid = charge_measure(range) && discharge_measure(range, capacitance);
     release_pins(); // Stop excitation on every success, timeout or ADC failure.
-    if (!valid || capacitance < minimum_capacitance)
-        return invalid;
-    return capacitance;
+    if (!valid)
+        return error_;
+    if (capacitance < minimum_capacitance)
+        return MeasurementResult::failure(MeasurementStatus::OutOfRange, "Capacitance below minimum");
+    return MeasurementResult::success(capacitance);
 }
 
 void CapacitanceMeter::deactivate()
@@ -224,5 +226,6 @@ void CapacitanceMeter::deactivate()
     release_pins();
     HAL_ADC_Stop(&adc_);
     active_ = false;
+    hardware_.release(this);
     // Leave the shared DWT counter running for other meters/debugging.
 }

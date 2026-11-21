@@ -1,11 +1,19 @@
 {
     "files.exclude": {
-        "ECHO": true,
+        "Drivers": true,
+        "Core": true,
+        "EWARM": true,
+        ".mxproject": true,
+        "ECHO.ioc": true,
+        "startup_stm32g431xx.s": true,
+        "STM32G431xx_FLASH.ld": true,
         "build": true,
         "cmake": true
     },
     "search.exclude": {
-        "ECHO/**": true,
+        "Drivers/**": true,
+        "Core/**": true,
+        "EWARM/**": true,
         "build/**": true,
         "cmake/**": true
     },

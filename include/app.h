@@ -12,7 +12,7 @@ void setup(void);
 void loop(void);
 
 #ifdef HAL_I2C_MODULE_ENABLED
-// Defined by CubeMX once I2C1 is enabled in ECHO/ECHO.ioc.
+// Defined by CubeMX once I2C1 is enabled in ECHO.ioc.
 extern I2C_HandleTypeDef hi2c1;
 #endif
 

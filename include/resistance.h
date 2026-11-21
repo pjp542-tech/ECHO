@@ -1,11 +1,12 @@
 #ifndef ECHO_RESISTANCE_H
 #define ECHO_RESISTANCE_H
 
-#include "stm32g4xx_hal.h"
+#include "hardware_manager.h"
+#include "measurement.h"
 #include <cstdint>
 
-// DG408 resistance meter on the NUCLEO-G431KB.
-// Owns ADC1 channel 1 and MUX control pins D9-D12 while in use.
+// GPIO-ranged resistance meter on the NUCLEO-G431KB.
+// Owns ADC1 channel 1 and the shared R/C resistor bank while in use.
 class ResistanceMeter
 {
 public:
@@ -14,27 +15,29 @@ public:
     enum class Status
     {
         Ok,
-        CalibrationFailed,
+        HardwareUnavailable,
         ChannelConfigurationFailed
     };
 
-    // ADC and its clocks must already be configured by CubeMX before activate().
-    // The constructor performs no hardware access. The ADC must outlive this object.
-    explicit ResistanceMeter(ADC_HandleTypeDef &adc);
+    // HardwareManager::begin() must succeed before activate().
+    // Construction performs no hardware access. HardwareManager must outlive this object.
+    explicit ResistanceMeter(HardwareManager &hardware);
+    ResistanceMeter(const ResistanceMeter&) = delete;
+    ResistanceMeter& operator=(const ResistanceMeter&) = delete;
     Status activate();
     // Blocking range scan (~50 ms normally); one sample per reference, no averaging.
     // Returns the best scan sample and leaves that range selected.
-    // Returns resistance in ohms, or NAN if inactive, all reads fail or ADC saturates.
-    float read_measurement();
-    // Disable excitation, stop ADC conversions and set MUX address outputs LOW.
+    // Returns ohms, status and an error message; value is NaN on failure.
+    MeasurementResult read_measurement();
+    // Release all shared range pins to high impedance and stop ADC conversions.
     // Safe to call repeatedly; inactive calls do not touch shared hardware.
     void deactivate();
 
 private:
-    void initialise_mux();
     void select_range(int range);
-    bool read_adc(uint32_t &reading);
+    MeasurementStatus read_adc(uint32_t &reading);
 
+    HardwareManager &hardware_;
     ADC_HandleTypeDef &adc_;
     bool active_ = false;
 };

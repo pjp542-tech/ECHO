@@ -45,11 +45,8 @@ COM_InitTypeDef BspCOMInit;
 
 ADC_HandleTypeDef hadc1;
 
-<<<<<<< HEAD
 TIM_HandleTypeDef htim2;
-=======
 I2C_HandleTypeDef hi2c1;
->>>>>>> LCD
 
 /* USER CODE BEGIN PV */
 
@@ -59,11 +56,8 @@ I2C_HandleTypeDef hi2c1;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
-<<<<<<< HEAD
 static void MX_TIM2_Init(void);
-=======
 static void MX_I2C1_Init(void);
->>>>>>> LCD
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -103,11 +97,8 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_ADC1_Init();
-<<<<<<< HEAD
   MX_TIM2_Init();
-=======
   MX_I2C1_Init();
->>>>>>> LCD
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -254,7 +245,6 @@ static void MX_ADC1_Init(void)
 }
 
 /**
-<<<<<<< HEAD
   * @brief TIM2 Initialization Function
   * @param None
   * @retval None
@@ -309,7 +299,10 @@ static void MX_TIM2_Init(void)
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
-=======
+
+}
+
+/**
   * @brief I2C1 Initialization Function
   * @param None
   * @retval None
@@ -354,7 +347,6 @@ static void MX_I2C1_Init(void)
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
->>>>>>> LCD
 
 }
 
@@ -379,6 +371,25 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* Shared R/C bank and unused former MUX pins idle at high impedance. */
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_11;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  GPIO_InitStruct.Pin = GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_12;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_6;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pin = GPIO_PIN_5 | GPIO_PIN_6;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* modebtn/PB4 and measurebtn/PB5: normally-open switches to GND. */
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Pin = GPIO_PIN_4 | GPIO_PIN_5;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

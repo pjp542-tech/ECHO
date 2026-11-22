@@ -4,9 +4,8 @@
 #include "hardware_manager.h"
 #include "measurement.h"
 #include <cstdint>
-#include <optional>
 
-// Owns ADC1 channel 15 (PB0) and the four resistor pins while active.
+// Owns shared ADC1 channel 1 (PA0/A0) and the four resistor pins while active.
 class CapacitanceMeter
 {
 public:
@@ -15,12 +14,6 @@ public:
         Ok,
         HardwareUnavailable,
         ChannelConfigurationFailed
-    };
-
-    struct TimeoutDetails {
-        uint32_t adc_count;
-        uint32_t target_count;
-        uint32_t resistance_ohms;
     };
 
     // Stores hardware references only; no hardware access during construction.
@@ -32,8 +25,6 @@ public:
     // One blocking attempt: farads, status and an error message.
     // Failed results have a NaN value.
     MeasurementResult read_measurement();
-    // Last sample from the stage that timed out, before any cleanup discharge.
-    const std::optional<TimeoutDetails>& timeout_details() const { return timeout_details_; }
     // Stop excitation and ADC conversions; resistor pins become high impedance.
     void deactivate();
 
@@ -49,7 +40,6 @@ private:
     ADC_HandleTypeDef &adc_;
     bool active_ = false;
     MeasurementResult error_; // Reset at the start of every measurement.
-    std::optional<TimeoutDetails> timeout_details_;
 };
 
 #endif

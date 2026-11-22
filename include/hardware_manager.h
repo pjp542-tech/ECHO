@@ -11,8 +11,8 @@ struct Pin {
 
 // NUCLEO-G431KB / MB1430. Keep ECHO.ioc and docs/wiring.md in sync.
 namespace BoardPins {
-inline const Pin resistance_sense{GPIOA, GPIO_PIN_0};  // A0, ADC1_IN1
-inline const Pin capacitance_sense{GPIOB, GPIO_PIN_0}; // D3, ADC1_IN15
+// Common resistor-bank / component junction for both R and C measurements.
+inline const Pin rc_sense{GPIOA, GPIO_PIN_0}; // A0, ADC1_IN1
 // Shared by resistance and capacitance; only the active meter drives these.
 inline const Pin rc_ranges[] = {
     {GPIOA, GPIO_PIN_9},  // D1: 1 kohm
@@ -26,8 +26,7 @@ inline const Pin lcd_scl{GPIOA, GPIO_PIN_15};           // D5 / A5 bridge alias
 inline const Pin lcd_sda{GPIOB, GPIO_PIN_7};            // D4 / A4 bridge alias
 inline const Pin modebtn{GPIOB, GPIO_PIN_4};              // D12, switch to GND
 inline const Pin measurebtn{GPIOB, GPIO_PIN_5};              // D11, switch to GND
-inline constexpr uint32_t resistance_channel = ADC_CHANNEL_1;
-inline constexpr uint32_t capacitance_channel = ADC_CHANNEL_15;
+inline constexpr uint32_t rc_channel = ADC_CHANNEL_1;
 }
 
 class HardwareManager {

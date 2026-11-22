@@ -11,30 +11,29 @@ MeterApp::MeterApp(HardwareManager& hardware)
 bool MeterApp::begin()
 {
     // Initialises shared hardware (including ADC calibration) through the controller.
-    const bool meter_ready = component_meter_.begin(ComponentMeter::Mode::None);
+    const bool meter_ready = component_meter_.begin();
     lcd_init(&lcd_); // Initialise and clear the 20x4 screen; leave it blank.
     buttons_.begin(); // Configure pull-ups and initialise debounce state.
     // The existing LCD driver has no status return; this reports meter setup only.
     return meter_ready;
 }
 
-float MeterApp::avg_measurement() {
-    const int num_samples = 10; // Number of samples to average
+ComponentMeter::Result MeterApp::avg_measurement() {
+    component_meter_.update(); // Trigger the first measurement
     ComponentMeter::Result result = component_meter_.latest();
-    double sum = 0.0;
-    for (int i = 0; i < num_samples; ++i) {
-        // update() returns false during the interval between fresh readings.
-        while (!component_meter_.update()) {
-            HAL_Delay(1);
+    const int num_samples = 100; // Number of samples to average
+    float sum = 0.0f;
+    for(int i = 0; i < num_samples; ++i) {
+        if (result.status != ComponentMeter::Status::Ok) {
+            return result; // Return error message if any reading fails
         }
-        result = component_meter_.latest();
-        if (result.status != ComponentMeter::Status::Ok)
-            return result.value;
         sum += result.value;
+        component_meter_.update(); // Trigger the next measurement
+        HAL_Delay(50); // Wait for 50 ms before the next attempt
     }
-    // Keep the mode and final sample's sequence/completion time with the mean.
-    result.value = static_cast<float>(sum / num_samples);
-    return result.value;
+    float average = sum / num_samples;
+    result.value = average;
+    return result;
 }
 
 const char* MeterApp::sanatise_result(float result)
@@ -60,57 +59,87 @@ const char* MeterApp::sanatise_result(float result)
     }
     if (scaled == 0.0) scaled = 0.0; // Avoid displaying negative zero.
 
-    std::snprintf(text, sizeof(text), "%.2f%s", scaled, prefixes[prefix]);
+    std::snprintf(text, sizeof(text), "%.2f %s", scaled, prefixes[prefix]);
     return text;
 }
 
 void MeterApp::display_result(const char* Value) {
     lcd_clear(&lcd_);
-    ComponentMeter::Result result = component_meter_.latest();
-    if (result.status == ComponentMeter::Status::Ok) {
         // Display the measured value with appropriate units
-        switch (result.mode) {
+    switch (component_meter_.mode()) {
 
-            case ComponentMeter::Mode::Resistance:
-                lcd_print(&lcd_, 0, "Resistance");
-                {
-                    char final_result[48];
-                    std::snprintf(final_result, sizeof(final_result), "%s ohms", Value);
-                    lcd_print(&lcd_, 1, final_result);
-                }
-                break;
+        case ComponentMeter::Mode::Resistance:
+            lcd_print(&lcd_, 0, "Resistance");
+            {
+                char final_result[48];
+                std::snprintf(final_result, sizeof(final_result), "%sohms", Value);
+                lcd_print(&lcd_, 1, final_result);
+            }
+            break;
 
-            case ComponentMeter::Mode::Capacitance:
-                lcd_print(&lcd_, 0, "Capacitance");
-                {
-                    char final_result[48];
-                    std::snprintf(final_result, sizeof(final_result), "%s F", Value);
-                    lcd_print(&lcd_, 1, final_result);
-                }
-                break;
+        case ComponentMeter::Mode::Capacitance:
+            lcd_print(&lcd_, 0, "Capacitance");
+            {
+                char final_result[48];
+                std::snprintf(final_result, sizeof(final_result), "%sF", Value);
+                lcd_print(&lcd_, 1, final_result);
+            }
+            break;
 
-            case ComponentMeter::Mode::Inductance:
-                lcd_print(&lcd_, 0, "Inductance");
-                {
-                    char final_result[48];
-                    std::snprintf(final_result, sizeof(final_result), "%s H", Value);
-                    lcd_print(&lcd_, 1, final_result);
-                }
-                break;
-        }
-
-        lcd_print(&lcd_, 2, "Mode: Menu");
-        lcd_print(&lcd_, 3, "Measure: Repeat");
+        case ComponentMeter::Mode::Inductance:
+            lcd_print(&lcd_, 0, "Inductance");
+            {
+                char final_result[48];
+                std::snprintf(final_result, sizeof(final_result), "%sH", Value);
+                lcd_print(&lcd_, 1, final_result);
+            }
+            break;
+        case ComponentMeter::Mode::None:
+            break;
     }
+
+    lcd_print(&lcd_, 2, "Mode: Menu");
+    lcd_print(&lcd_, 3, "Measure: Repeat");
 }
 
+void MeterApp::display_error(ComponentMeter::Result result) {
+    const char* message = result.error_message;
+    if (message == nullptr || *message == '\0')
+        message = "No reading available";
+    lcd_clear(&lcd_);
+    lcd_print(&lcd_, 0, "       Error");
+    for (uint8_t row = 1; row < 4 && *message; ++row) {
+        while (*message == ' ' || *message == '\r') ++message;
+        char line[21] = {};
+        unsigned length = 0;
+        unsigned last_space = 0;
+        while (length < 20 && message[length] && message[length] != '\n') {
+            if (message[length] == ' ') last_space = length;
+            ++length;
+        }
+        // Keep whole words together; split only words longer than a row.
+        if (length == 20 && message[length] && message[length] != ' ' &&
+            message[length] != '\n' && last_space != 0)
+            length = last_space;
+        for (unsigned i = 0; i < length; ++i) line[i] = message[i];
+        message += length;
+        while (*message == ' ' || *message == '\r') ++message;
+        if (*message == '\n') ++message;
+        lcd_print(&lcd_, row, line);
+    }
+}
 void MeterApp::get_measurement()
 {
+    lcd_clear(&lcd_);
     lcd_print(&lcd_, 1, "                    ");
     lcd_print(&lcd_, 2, "                    ");
     lcd_print(&lcd_, 1, "Measuring...");
-    float result = avg_measurement();
-    const char* result_text = sanatise_result(result);
+    ComponentMeter::Result result = avg_measurement();
+    if (result.status != ComponentMeter::Status::Ok) {
+        display_error(result);
+        return;
+    }
+    const char* result_text = sanatise_result(result.value);
     display_result(result_text);
 }
 

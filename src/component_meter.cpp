@@ -26,7 +26,6 @@ bool ComponentMeter::begin(Mode initial_mode)
     if (!hardware_.begin()) {
         result_ = {};
         result_.mode = initial_mode;
-        result_.sequence = sequence_;
         result_.status = Status::InitializationFailed;
         result_.error_message = "Shared hardware initialization failed";
         return false;
@@ -44,7 +43,6 @@ void ComponentMeter::stop()
     }
     mode_ = Mode::None;
     result_ = {};
-    result_.sequence = sequence_;
 }
 
 bool ComponentMeter::select_mode(Mode mode)
@@ -52,7 +50,6 @@ bool ComponentMeter::select_mode(Mode mode)
     if (!hardware_.ready()) {
         result_ = {};
         result_.mode = mode;
-        result_.sequence = sequence_;
         result_.status = Status::HardwareUnavailable;
         result_.error_message = "HardwareManager not initialized";
         return false;
@@ -108,7 +105,6 @@ bool ComponentMeter::update()
     measured_ = true;
     if (measurement.status == Status::Ok && !std::isfinite(measurement.value))
         measurement = MeasurementResult::failure(Status::InvalidReading, "Non-finite measurement");
-    result_ = {mode_, measurement.value, measurement.status, measurement.error_message,
-               ++sequence_, last_completed_ms_};
+    result_ = {mode_, measurement.value, measurement.status, measurement.error_message};
     return true;
 }

@@ -6,7 +6,7 @@
 #include <cstdint>
 
 // GPIO-ranged resistance meter on the NUCLEO-G431KB.
-// Owns ADC1 channel 1 and the shared R/C resistor bank while in use.
+// Owns shared ADC1 channel 1 (PA0/A0) and the R/C resistor bank while in use.
 class ResistanceMeter
 {
 public:

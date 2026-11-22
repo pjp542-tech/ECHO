@@ -96,7 +96,7 @@ bool InductanceMeter::wait_for_edge()
     while (__HAL_TIM_GET_FLAG(&timer_, TIM_FLAG_CC2) == RESET)
     {
         if (HAL_GetTick() - start >= edge_timeout_ms) {
-            error_ = MeasurementResult::failure(MeasurementStatus::Timeout, "No capture edge in time");
+            error_ = MeasurementResult::failure(MeasurementStatus::Timeout, "No captured edge in time");
             return false;
         }
     }

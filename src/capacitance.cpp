@@ -63,8 +63,8 @@ CapacitanceMeter::Status CapacitanceMeter::activate()
     __HAL_RCC_GPIOB_CLK_ENABLE();
     release_pins();
 
-    if (!hardware_.configure_adc(BoardPins::capacitance_sense,
-                                 BoardPins::capacitance_channel,
+    if (!hardware_.configure_adc(BoardPins::rc_sense,
+                                 BoardPins::rc_channel,
                                  ADC_SAMPLETIME_47CYCLES_5)) {
         hardware_.release(this);
         return Status::ChannelConfigurationFailed;
@@ -108,7 +108,6 @@ bool CapacitanceMeter::discharge_capacitor(uint32_t range, uint32_t threshold)
         if (value < threshold)
             return true;
         if (DWT->CYCCNT - start > timeout_cycles()) {
-            timeout_details_ = TimeoutDetails{value, threshold, static_cast<uint32_t>(reference_ohms[range])};
             error_ = MeasurementResult::failure(MeasurementStatus::Timeout, "Capacitor discharge timeout");
             return false;
         }
@@ -146,7 +145,6 @@ bool CapacitanceMeter::charge_measure(uint32_t &range)
         if (DWT->CYCCNT - start > timeout_cycles())
         {
             discharge_capacitor(0, capacitor_empty);
-            timeout_details_ = TimeoutDetails{value, charge_target, static_cast<uint32_t>(reference_ohms[0])};
             error_ = MeasurementResult::failure(MeasurementStatus::Timeout, "Capacitor charge timeout");
             return false;
         }
@@ -191,7 +189,6 @@ bool CapacitanceMeter::discharge_measure(uint32_t range, float &capacitance)
         if (DWT->CYCCNT - start > timeout_cycles())
         {
             discharge_capacitor(range, capacitor_empty);
-            timeout_details_ = TimeoutDetails{value, low_threshold, static_cast<uint32_t>(reference_ohms[range])};
             error_ = MeasurementResult::failure(MeasurementStatus::Timeout, "Capacitance timing timeout");
             return false;
         }
@@ -204,7 +201,6 @@ bool CapacitanceMeter::discharge_measure(uint32_t range, float &capacitance)
 MeasurementResult CapacitanceMeter::read_measurement()
 {
     error_ = {};
-    timeout_details_.reset();
     if (!active_)
         return MeasurementResult::failure(MeasurementStatus::Inactive, "Capacitance inactive");
 

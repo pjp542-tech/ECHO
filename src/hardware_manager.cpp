@@ -29,8 +29,7 @@ bool HardwareManager::begin()
     }
     configure_pin(BoardPins::inductance_pulse, GPIO_MODE_ANALOG);
     configure_pin(BoardPins::inductance_capture, GPIO_MODE_ANALOG);
-    configure_pin(BoardPins::resistance_sense, GPIO_MODE_ANALOG);
-    configure_pin(BoardPins::capacitance_sense, GPIO_MODE_ANALOG);
+    configure_pin(BoardPins::rc_sense, GPIO_MODE_ANALOG);
     // PA5/PA6 can be connected to PB7/PA15 by the board's I2C bridges.
     configure_pin({GPIOA, GPIO_PIN_5}, GPIO_MODE_INPUT);
     configure_pin({GPIOA, GPIO_PIN_6}, GPIO_MODE_INPUT);

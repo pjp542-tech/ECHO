@@ -38,8 +38,8 @@ ResistanceMeter::Status ResistanceMeter::activate()
     if (!hardware_.try_acquire(this))
         return Status::HardwareUnavailable;
     select_range(-1); // Leave all branches high impedance until ADC setup succeeds.
-    if (!hardware_.configure_adc(BoardPins::resistance_sense,
-                                 BoardPins::resistance_channel,
+    if (!hardware_.configure_adc(BoardPins::rc_sense,
+                                 BoardPins::rc_channel,
                                  ADC_SAMPLETIME_640CYCLES_5)) {
         hardware_.release(this);
         return Status::ChannelConfigurationFailed;

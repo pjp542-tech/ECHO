@@ -12,17 +12,19 @@ public:
     // Initialise peripherals without selecting a meter; the menu will select one later.
     bool begin();
     void update();
-    void menu();
+    
 
 private:
     // Highlight the zero-based menu choice (0..2) on LCD rows 1..3.
+    void menu();
     void change_row(int row);
     void selected_meter(int choice);
     void get_measurement();
+    void display_error(ComponentMeter::Result result);
     // Average 10 fresh readings, or return the first error result unchanged.
-    float avg_measurement();
+    ComponentMeter::Result avg_measurement();
     void display_result(const char* text);
-    // Format a base-SI value as text such as "4.70k" or "22.00n"; no LCD writes.
+    // Format as "4.70 k" or "22.00 n"; append the unit directly after the prefix.
     // Returned text remains valid until the next call, which overwrites it.
     const char* sanatise_result(float result);
     ComponentMeter component_meter_;

@@ -1,0 +1,56 @@
+void LcdUi::show_diode(const DiodeMeter::Measurement &m)
+{
+draw_mode_header();
+
+if (m.state == DiodeMeter::ResultState::OpenCircuit)
+{
+write_padded_row(1, "Open / No Diode ");
+write_padded_row(2, "Check component pin ");
+draw_footer("[D0]Mode [A5]Retry");
+return;
+}
+
+if (m.state == DiodeMeter::ResultState::ShortCircuit)
+{
+write_padded_row(1, "FAULT: SHORTED ");
+write_padded_row(2, "Vf < 0.10 V both way");
+draw_footer("[D0]Mode [A5]Retry");
+return;
+}
+
+if (m.state == DiodeMeter::ResultState::FaultyLeaky)
+{
+write_padded_row(1, "FAULT: LEAKY / RES ");
+write_padded_row(2, "Conducts both ways ");
+draw_footer("[D0]Mode [A5]Retry");
+return;
+}
+
+if (m.state != DiodeMeter::ResultState::GoodForward &&
+m.state != DiodeMeter::ResultState::GoodReverse)
+{
+write_padded_row(1, "Measurement Error ");
+write_padded_row(2, "Retry diode test ");
+draw_footer("[D0]Mode [A5]Retry");
+return;
+}
+
+char vf_str[12];
+format_fixed(vf_str, sizeof(vf_str), m.forward_voltage_v, 2);
+
+const char *dir = (m.state == DiodeMeter::ResultState::GoodForward) ? "A->B" : "B->A";
+const char *type = "Silicon";
+if (m.forward_voltage_v < 0.45f)
+type = "Schottky";
+else if (m.forward_voltage_v >= 1.40f)
+type = "LED";
+
+char row1[24];
+char row2[24];
+std::snprintf(row1, sizeof(row1), "Vf: %s V (%s)", vf_str, dir);
+std::snprintf(row2, sizeof(row2), "Type: %-8s OK", type);
+
+write_padded_row(1, row1);
+write_padded_row(2, row2);
+draw_footer("[D0]Mode [A5]Meas ");
+}

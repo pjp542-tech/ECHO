@@ -5,7 +5,7 @@
 #include "component_meter.h"
 #include "lcd.h"
 
-// Hardware setup is provided; application behaviour is left to the group.
+// Coordinates the menu and measurements, one step per update().
 class MeterApp {
 public:
     explicit MeterApp(HardwareManager& hardware);
@@ -21,8 +21,8 @@ private:
     void selected_meter(int choice);
     void get_measurement();
     void display_error(ComponentMeter::Result result);
-    // Average 10 fresh readings, or return the first error result unchanged.
-    ComponentMeter::Result avg_measurement();
+    // Accumulate one fresh reading when available; stop on the first error.
+    void avg_measurement();
     void display_result(const char* text);
     // Format as "4.70 k" or "22.00 n"; append the unit directly after the prefix.
     // Returned text remains valid until the next call, which overwrites it.
@@ -30,6 +30,12 @@ private:
     ComponentMeter component_meter_;
     Buttons buttons_;
     I2C_LCD_HandleTypeDef lcd_;
+    enum class State { Menu, Ready, Measuring, Error };
+    State state_ = State::Menu;
+    int current_row_ = 0;
+    unsigned sample_count_ = 0;
+    double sample_sum_ = 0.0;
+    static constexpr unsigned num_samples = 10;
 };
 
 #endif

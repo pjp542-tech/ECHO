@@ -14,26 +14,25 @@ bool MeterApp::begin()
     const bool meter_ready = component_meter_.begin();
     lcd_init(&lcd_); // Initialise and clear the 20x4 screen; leave it blank.
     buttons_.begin(); // Configure pull-ups and initialise debounce state.
+    if (meter_ready) menu();
     // The existing LCD driver has no status return; this reports meter setup only.
     return meter_ready;
 }
 
-ComponentMeter::Result MeterApp::avg_measurement() {
-    component_meter_.update(); // Trigger the first measurement
-    ComponentMeter::Result result = component_meter_.latest();
-    const int num_samples = 100; // Number of samples to average
-    float sum = 0.0f;
-    for(int i = 0; i < num_samples; ++i) {
-        if (result.status != ComponentMeter::Status::Ok) {
-            return result; // Return error message if any reading fails
-        }
-        sum += result.value;
-        component_meter_.update(); // Trigger the next measurement
-        HAL_Delay(50); // Wait for 50 ms before the next attempt
+void MeterApp::avg_measurement() {
+    // update() returns false between acquisitions: never reuse latest() then.
+    if (!component_meter_.update()) return;
+    const ComponentMeter::Result result = component_meter_.latest();
+    if (result.status != ComponentMeter::Status::Ok) {
+        state_ = State::Ready;
+        display_error(result);
+        return;
     }
-    float average = sum / num_samples;
-    result.value = average;
-    return result;
+    sample_sum_ += result.value;
+    if (++sample_count_ == num_samples) {
+        state_ = State::Ready;
+        display_result(sanatise_result(static_cast<float>(sample_sum_ / num_samples)));
+    }
 }
 
 const char* MeterApp::sanatise_result(float result)
@@ -131,16 +130,11 @@ void MeterApp::display_error(ComponentMeter::Result result) {
 void MeterApp::get_measurement()
 {
     lcd_clear(&lcd_);
-    lcd_print(&lcd_, 1, "                    ");
-    lcd_print(&lcd_, 2, "                    ");
     lcd_print(&lcd_, 1, "Measuring...");
-    ComponentMeter::Result result = avg_measurement();
-    if (result.status != ComponentMeter::Status::Ok) {
-        display_error(result);
-        return;
-    }
-    const char* result_text = sanatise_result(result.value);
-    display_result(result_text);
+    lcd_print(&lcd_, 3, "Mode: Cancel");
+    sample_count_ = 0;
+    sample_sum_ = 0.0;
+    state_ = State::Measuring;
 }
 
 
@@ -155,20 +149,15 @@ void MeterApp::selected_meter(int choice)
         case 2: mode = ComponentMeter::Mode::Inductance; lcd_print(&lcd_, 0, "Inductance"); break;
         default: return; // Invalid choice, do nothing
     }
-    component_meter_.select_mode(mode);
+    if (!component_meter_.select_mode(mode)) {
+        state_ = State::Error;
+        display_error(component_meter_.latest());
+        return;
+    }
+    state_ = State::Ready;
     
     lcd_print(&lcd_, 1, "Connect Component");
     lcd_print(&lcd_, 2, "Press Measure");
-    while (true) {
-        Buttons::Events events = buttons_.poll();
-        if (events.measurebtn_pressed) {
-            // Measure the component
-            get_measurement();
-        } else if (events.modebtn_pressed) {
-            // Return to menu
-            break;
-        }
-    }
 }
 void MeterApp::change_row(int row)
 {
@@ -184,28 +173,38 @@ void MeterApp::change_row(int row)
 }
 
 void MeterApp::menu(){
-    int current_row = 0;
+    component_meter_.stop();
+    state_ = State::Menu;
+    current_row_ = 0;
     lcd_clear(&lcd_);
     lcd_print(&lcd_, 0, "Select Meter:");
     lcd_print(&lcd_, 1, "  1. Resistance");
     lcd_print(&lcd_, 2, "  2. Capacitance");
     lcd_print(&lcd_, 3, "  3. Inductance");
-    change_row(current_row);
-
-    while (true) {
-        Buttons::Events events = buttons_.poll();
-        if (events.modebtn_pressed) {
-            current_row = (current_row + 1) % 3; // Move to the next row
-            change_row(current_row);
-        } else if (events.measurebtn_pressed) {
-            selected_meter(current_row);
-            break; // Exit the menu after selection
-        }
-    }
+    change_row(current_row_);
 
 }
 
 void MeterApp::update()
 {
-    menu(); // Call the menu to select a meter mode
+    const Buttons::Events events = buttons_.poll();
+    if (state_ == State::Menu) {
+        if (events.modebtn_pressed) {
+            current_row_ = (current_row_ + 1) % 3;
+            change_row(current_row_);
+        } else if (events.measurebtn_pressed) {
+            selected_meter(current_row_);
+        }
+        return;
+    }
+    if (events.modebtn_pressed) {
+        menu(); // Also cancels an unfinished average and releases the hardware.
+        return;
+    }
+    if (state_ == State::Error) {
+        if (events.measurebtn_pressed) selected_meter(current_row_);
+        return;
+    }
+    if (state_ == State::Ready && events.measurebtn_pressed) get_measurement();
+    if (state_ == State::Measuring) avg_measurement();
 }

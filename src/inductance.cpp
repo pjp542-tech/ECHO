@@ -1,4 +1,5 @@
 #include "inductance.h"
+#include <cmath>
 #include <limits>
 
 namespace
@@ -10,8 +11,6 @@ constexpr float ticks_per_microsecond = 10.0f;
 constexpr float pi = 3.1415927f;
 constexpr uint32_t pulse_ticks = 20; // 2 microseconds at 10 MHz.
 constexpr uint32_t edge_timeout_ms = 5;
-constexpr float minimum_period_us = 5.0f;
-constexpr float maximum_period_us = 100.0f;
 constexpr float invalid = std::numeric_limits<float>::quiet_NaN();
 }
 
@@ -135,8 +134,8 @@ MeasurementResult InductanceMeter::read_measurement()
     const float period_us = measure_period() * period_correction;
     if (error_.status != MeasurementStatus::NoReading)
         return error_;
-    if (!(period_us >= minimum_period_us && period_us <= maximum_period_us))
-        return MeasurementResult::failure(MeasurementStatus::OutOfRange, "Period outside 5-100 us");
+    if (!std::isfinite(period_us) || period_us <= 0.0f)
+        return MeasurementResult::failure(MeasurementStatus::InvalidReading, "Invalid captured period");
     const float frequency_hz = 1000000.0f / period_us;
     return MeasurementResult::success(
         1.0f / (4.0f * pi * pi * frequency_hz * frequency_hz * capacitor_farads));
